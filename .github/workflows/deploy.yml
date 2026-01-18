@@ -37,7 +37,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.x
+          flutter-version: 3.x.
           cache: true
 
       - name: Cache Gradle
@@ -65,4 +65,4 @@ jobs:
         id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # The action will now automatically find your .releaserc.json file
+          # The action will now automatically find your .releaserc.json files
