@@ -1,24 +1,25 @@
-name: Semantic Release
+name: Release
 
 on:
+  workflow_dispatch: # Allows manual trigger
   push:
     branches:
-      - main # Changed from master to main
+      - main # Adjusted from 'master' based on your previous logs
 
 jobs:
   release:
-    name: Build and Release
+    name: Release
     permissions:
-      contents: write
-      id-token: write
+      contents: write    # To create tags and releases
+      id-token: write    # To sign the build (Provenance)
       attestations: write
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 
+          fetch-depth: 0
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -26,20 +27,33 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Flutter
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.x
+          flutter-version: 3.29.x
           cache: true
 
-      - name: Install Dependencies
+      - name: Cache Gradle
+        uses: burrunan/gradle-cache-action@v3
+        with:
+          build-root-directory: ${{ github.workspace }}/android
+
+      - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Build Android Artifacts
+      - name: Generate code files
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Setup keystore
+        # This decodes your secret and creates the physical file needed to sign the APK
         run: |
-          flutter build apk --release
-          flutter build appbundle --release
+          echo "${{ secrets.KEYSTORE }}" | base64 --decode > "android/app/keystore.jks"
 
       - name: Semantic Release
         uses: cycjimmy/semantic-release-action@v4
@@ -47,18 +61,33 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          extra_plugins: |
-            @semantic-release/git
+          branch: main
+          # We manually list plugins to skip @semantic-release/npm (avoiding the ENOPKG error)
+          plugins: |
+            @semantic-release/commit-analyzer
+            @semantic-release/release-notes-generator
             @semantic-release/github
-          branch: main # Changed from master to main
 
-      - name: Upload Artifacts to Release
+      - name: Build Signed APK
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          flutter build apk --release \
+            --dart-define=KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} \
+            --dart-define=KEYSTORE_ALIAS=${{ secrets.KEYSTORE_ENTRY_ALIAS }} \
+            --dart-define=KEYSTORE_ALIAS_PASSWORD=${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
+
+      - name: Upload Binaries to GitHub Release
         if: steps.semantic.outputs.new_release_published == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.semantic.outputs.new_release_version }}
           files: |
             build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/bundle/release/app-release.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attest (Provenance)
+        if: steps.semantic.outputs.new_release_published == 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: build/app/outputs/flutter-apk/app-release.apk
