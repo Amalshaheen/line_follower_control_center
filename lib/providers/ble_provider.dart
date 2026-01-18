@@ -13,7 +13,7 @@ class BleProvider with ChangeNotifier {
   // State variables
   BluetoothAdapterState _adapterState = BluetoothAdapterState.unknown;
   bool _isScanning = false;
-  List<BleDeviceModel> _scannedDevices = [];
+  final List<BleDeviceModel> _scannedDevices = [];
   BleDeviceModel? _connectedDevice;
   List<ServiceData> _services = [];
   String? _errorMessage;
@@ -197,6 +197,7 @@ class BleProvider with ChangeNotifier {
     bool withoutResponse = false,
   }) async {
     try {
+      debugPrint('BLE write -> ${characteristic.uuid} (${characteristic.remoteId}) value=${utf8.decode(value, allowMalformed: true)} len=${value.length} withoutResponse=$withoutResponse');
       await _bleService.writeCharacteristic(
         characteristic,
         value,

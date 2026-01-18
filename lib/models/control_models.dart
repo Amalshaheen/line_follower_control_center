@@ -1,4 +1,5 @@
 /// Models for robot control parameters
+library;
 
 /// PID (Proportional-Integral-Derivative) controller parameters
 class PIDParameters {
