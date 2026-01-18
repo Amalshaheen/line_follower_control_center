@@ -1,20 +1,21 @@
 name: Release
 
 on:
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:
   push:
     branches:
-      - main # Adjusted from 'master' based on your previous logs
+      - main
 
 jobs:
   release:
     name: Release
     permissions:
-      contents: write    # To create tags and releases
-      id-token: write    # To sign the build (Provenance)
+      contents: write
+      issues: write      # Added this to fix the 403 error
+      pull-requests: write
+      id-token: write
       attestations: write
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,7 +37,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.x
+          flutter-version: 3.29.x
           cache: true
 
       - name: Cache Gradle
@@ -44,47 +45,24 @@ jobs:
         with:
           build-root-directory: ${{ github.workspace }}/android
 
-      - name: Get Flutter dependencies
+      - name: Get dependencies
         run: flutter pub get
 
+      - name: Generate code files
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
       - name: Setup keystore
-        # This decodes your secret and creates the physical file needed to sign the APK
         run: |
           echo "${{ secrets.KEYSTORE }}" | base64 --decode > "android/app/keystore.jks"
+
+      - name: Build Signed APK
+        # We build the APK BEFORE the release step so it exists when semantic-release looks for it
+        run: |
+          flutter build apk --release
 
       - name: Semantic Release
         uses: cycjimmy/semantic-release-action@v4
         id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          branch: main
-          # We manually list plugins to skip @semantic-release/npm (avoiding the ENOPKG error)
-          plugins: |
-            @semantic-release/commit-analyzer
-            @semantic-release/release-notes-generator
-            @semantic-release/github
-
-      - name: Build Signed APK
-        if: steps.semantic.outputs.new_release_published == 'true'
-        run: |
-          flutter build apk --release \
-            --dart-define=KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} \
-            --dart-define=KEYSTORE_ALIAS=${{ secrets.KEYSTORE_ENTRY_ALIAS }} \
-            --dart-define=KEYSTORE_ALIAS_PASSWORD=${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
-
-      - name: Upload Binaries to GitHub Release
-        if: steps.semantic.outputs.new_release_published == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.semantic.outputs.new_release_version }}
-          files: |
-            build/app/outputs/flutter-apk/app-release.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Attest (Provenance)
-        if: steps.semantic.outputs.new_release_published == 'true'
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: build/app/outputs/flutter-apk/app-release.apk
+          # The action will now automatically find your .releaserc.json file
