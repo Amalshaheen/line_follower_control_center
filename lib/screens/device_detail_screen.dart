@@ -15,9 +15,17 @@ class DeviceDetailScreen extends StatefulWidget {
 }
 
 class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
+  // Known service/characteristics for the ESP32 sketch
+  static const String _serviceUuid = '12345678-1234-5678-1234-56789abcdef0';
+  static const String _commandUuid = '12345678-1234-5678-1234-56789abcdef1';
+  static const String _telemetryUuid = '12345678-1234-5678-1234-56789abcdef2';
+
   final TextEditingController _sendController = TextEditingController();
   final List<String> _receivedMessages = [];
   BluetoothCharacteristic? _selectedCharacteristic;
+  BluetoothCharacteristic? _commandCharacteristic;
+  BluetoothCharacteristic? _telemetryCharacteristic;
+  bool _telemetryListening = false;
   bool _isHexMode = false;
 
   // Control state
@@ -25,8 +33,31 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   SpeedControl _speedControl = SpeedControl(speed: 0);
   ControlMode _controlMode = ControlMode.stopped;
 
+  BluetoothCharacteristic? get _commandTarget {
+    // Prefer the known command characteristic; otherwise allow a manually
+    // selected characteristic only if it supports write.
+    if (_commandCharacteristic != null) return _commandCharacteristic;
+    if (_selectedCharacteristic != null &&
+        (_selectedCharacteristic!.properties.write ||
+            _selectedCharacteristic!.properties.writeWithoutResponse)) {
+      return _selectedCharacteristic;
+    }
+    return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Try to auto-bind the known command/telemetry characteristics once the UI is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bindKnownCharacteristics());
+  }
+
   @override
   void dispose() {
+    final provider = Provider.of<BleProvider>(context, listen: false);
+    if (_telemetryCharacteristic != null && _telemetryListening) {
+      provider.unsubscribeFromCharacteristic(_telemetryCharacteristic!);
+    }
     _sendController.dispose();
     super.dispose();
   }
@@ -47,9 +78,18 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
             return const Center(child: Text('No device connected'));
           }
 
-          final canSendCommands =
-              _selectedCharacteristic != null &&
-              _selectedCharacteristic!.properties.write;
+          final commandChar = _commandCharacteristic ?? _selectedCharacteristic;
+          final canSendCommands = commandChar != null &&
+              (commandChar.properties.write ||
+                  commandChar.properties.writeWithoutResponse);
+
+          // If we already discovered services but haven't latched onto the expected
+          // command/telemetry characteristics yet, try again in the next frame.
+          if ((commandChar == null || (!_telemetryListening &&
+                  _telemetryCharacteristic == null)) &&
+              bleProvider.services.isNotEmpty) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => _bindKnownCharacteristics());
+          }
 
           return ListView(
             children: [
@@ -238,6 +278,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                 onTap: () {
                   setState(() {
                     _selectedCharacteristic = char.characteristic;
+                    if (char.uuid.toLowerCase() == _commandUuid &&
+                        char.canWrite) {
+                      _commandCharacteristic = char.characteristic;
+                    }
+                    if (char.uuid.toLowerCase() == _telemetryUuid &&
+                        (char.canNotify || char.canIndicate)) {
+                      _telemetryCharacteristic = char.characteristic;
+                    }
                   });
                 },
               );
@@ -356,12 +404,12 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                   vertical: 12,
                 ),
               ),
-              enabled: _selectedCharacteristic != null,
+              enabled: _commandTarget != null,
             ),
           ),
           const SizedBox(width: 8),
           FloatingActionButton(
-            onPressed: _selectedCharacteristic != null ? _sendData : null,
+            onPressed: _commandTarget != null ? _sendData : null,
             child: const Icon(Icons.send),
           ),
         ],
@@ -416,6 +464,9 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
     if (isNotifying) {
       await provider.unsubscribeFromCharacteristic(characteristic);
       if (mounted) {
+        if (_telemetryCharacteristic?.uuid == characteristic.uuid) {
+          setState(() => _telemetryListening = false);
+        }
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Notifications disabled')));
@@ -435,6 +486,9 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       });
 
       if (success && mounted) {
+        if (_telemetryCharacteristic?.uuid == characteristic.uuid) {
+          setState(() => _telemetryListening = true);
+        }
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Notifications enabled')));
@@ -443,7 +497,15 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   }
 
   Future<void> _sendData() async {
-    if (_selectedCharacteristic == null || _sendController.text.isEmpty) return;
+    final target = _commandTarget;
+    if (target == null || _sendController.text.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Select a writable command characteristic first')),
+        );
+      }
+      return;
+    }
 
     final provider = Provider.of<BleProvider>(context, listen: false);
     List<int> data;
@@ -459,9 +521,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
       } else {
         data = utf8.encode(_sendController.text);
       }
+      debugPrint('Manual send to ${target.uuid}: ${_sendController.text}');
 
       final success = await provider.writeCharacteristic(
-        _selectedCharacteristic!,
+        target,
         data,
       );
 
@@ -499,7 +562,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   // Control Command Methods
 
   void _onModeChanged(ControlMode mode, BleProvider provider) {
-    provider.sendControlMode(mode, _selectedCharacteristic!).then((success) {
+    final target = _commandTarget;
+    if (target == null) {
+      _showMissingCommandChar();
+      return;
+    }
+
+    debugPrint('Sending MODE to ${target.uuid}: ${mode.toCommand()}');
+    provider.sendControlMode(mode, target).then((success) {
       if (success && mounted) {
         setState(() {
           _controlMode = mode;
@@ -516,7 +586,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   }
 
   void _sendPIDParameters(BleProvider provider) {
-    provider.sendPIDParameters(_pidParams, _selectedCharacteristic!).then((
+    final target = _commandTarget;
+    if (target == null) {
+      _showMissingCommandChar();
+      return;
+    }
+
+    debugPrint('Sending PID to ${target.uuid}: ${_pidParams.toCommand()}');
+    provider.sendPIDParameters(_pidParams, target).then((
       success,
     ) {
       if (success && mounted) {
@@ -533,7 +610,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   void _startMotor(BleProvider provider) {
     if (_speedControl.speed == 0) return;
 
-    provider.sendSpeed(_speedControl.speed, _selectedCharacteristic!).then((
+    final target = _commandTarget;
+    if (target == null) {
+      _showMissingCommandChar();
+      return;
+    }
+
+    debugPrint('Sending SPEED to ${target.uuid}: ${_speedControl.speed}');
+    provider.sendSpeed(_speedControl.speed, target).then((
       success,
     ) {
       if (success && mounted) {
@@ -554,7 +638,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   }
 
   void _stopMotor(BleProvider provider) {
-    provider.sendStopCommand(_selectedCharacteristic!).then((success) {
+    final target = _commandTarget;
+    if (target == null) {
+      _showMissingCommandChar();
+      return;
+    }
+
+    debugPrint('Sending STOP to ${target.uuid}');
+    provider.sendStopCommand(target).then((success) {
       if (success && mounted) {
         setState(() {
           _speedControl = SpeedControl(speed: 0);
@@ -565,5 +656,90 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
         ).showSnackBar(const SnackBar(content: Text('Motor stopped')));
       }
     });
+  }
+
+  Future<void> _bindKnownCharacteristics() async {
+    final provider = Provider.of<BleProvider>(context, listen: false);
+    if (!mounted || provider.services.isEmpty) return;
+
+    BluetoothCharacteristic? commandChar = _commandCharacteristic;
+    BluetoothCharacteristic? telemetryChar = _telemetryCharacteristic;
+    BluetoothCharacteristic? fallbackWritable;
+
+    for (final service in provider.services) {
+      if (service.uuid.toLowerCase() != _serviceUuid) continue;
+      for (final char in service.characteristics) {
+        final uuid = char.uuid.toLowerCase();
+        if (uuid == _commandUuid && char.canWrite) {
+          commandChar = char.characteristic;
+        }
+        if (uuid == _telemetryUuid &&
+            (char.canNotify || char.canIndicate)) {
+          telemetryChar = char.characteristic;
+        }
+        if (fallbackWritable == null && char.canWrite) {
+          fallbackWritable = char.characteristic;
+        }
+      }
+    }
+
+    // If the explicit command UUID was not found but there is a writable
+    // characteristic in the same service, use it as a fallback so commands
+    // still route somewhere meaningful.
+    commandChar ??= fallbackWritable;
+
+    if (mounted && commandChar != null &&
+        (_commandCharacteristic != commandChar ||
+            _selectedCharacteristic == null)) {
+      setState(() {
+        _commandCharacteristic = commandChar;
+        _selectedCharacteristic ??= commandChar;
+      });
+    }
+
+    if (telemetryChar != null && !_telemetryListening) {
+      final subscribed = await provider.subscribeToCharacteristic(
+        telemetryChar,
+        _handleTelemetryData,
+      );
+
+      if (subscribed && mounted) {
+        setState(() {
+          _telemetryCharacteristic = telemetryChar;
+          _telemetryListening = true;
+          _receivedMessages.add('◄ Telemetry notifications enabled');
+        });
+      }
+    }
+  }
+
+  void _handleTelemetryData(List<int> value) {
+    if (!mounted) return;
+
+    final text = String.fromCharCodes(value);
+    String message;
+
+    try {
+      if (text.startsWith('TELEM:')) {
+        final telemetry = RobotTelemetry.fromCommand(text);
+        message =
+            '◄ Telemetry | speed ${telemetry.currentSpeed}/${telemetry.targetSpeed}, err ${telemetry.lateralError.toStringAsFixed(2)}, line ${telemetry.lineDetected ? '1' : '0'}';
+      } else {
+        message = '◄ NOTIF: $text';
+      }
+    } catch (_) {
+      message = '◄ NOTIF: $text';
+    }
+
+    setState(() {
+      _receivedMessages.add(message);
+    });
+  }
+
+  void _showMissingCommandChar() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Command characteristic not found. Tap the writable char or refresh.')),
+    );
   }
 }

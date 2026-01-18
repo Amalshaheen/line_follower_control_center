@@ -142,6 +142,8 @@ class BleService {
     bool withoutResponse = false,
   }) async {
     try {
+      // Debug hook: log the write target and size to help diagnose silent writes.
+      print('BleService write -> ${characteristic.uuid} len=${value.length} withoutResponse=$withoutResponse');
       await characteristic.write(value, withoutResponse: withoutResponse);
     } catch (e) {
       throw Exception('Failed to write characteristic: $e');
