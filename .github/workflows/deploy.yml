@@ -54,8 +54,11 @@ jobs:
 
       - name: Build Signed APK
         # We build the APK BEFORE the release step so it exists when semantic-release looks for it
-        run: |
-          flutter build apk --release
+        run: flutter build apk --release
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
+          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
 
       - name: Semantic Release
         uses: cycjimmy/semantic-release-action@v4
