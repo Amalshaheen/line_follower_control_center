@@ -3,14 +3,14 @@ name: Semantic Release
 on:
   push:
     branches:
-      - main # Triggers on every push to master
+      - main # Changed from master to main
 
 jobs:
   release:
     name: Build and Release
     permissions:
-      contents: write   # Required to create tags and releases
-      id-token: write   # Required for provenance/attestations
+      contents: write
+      id-token: write
       attestations: write
     runs-on: ubuntu-latest
 
@@ -18,7 +18,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Fetches all history so semantic-release can calculate version
+          fetch-depth: 0 
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -47,14 +47,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # This specifies which files to attach to the release
           extra_plugins: |
             @semantic-release/git
             @semantic-release/github
-          branch: master
+          branch: main # Changed from master to main
 
       - name: Upload Artifacts to Release
-        # This only runs if a new version was actually determined (e.g., a 'feat' or 'fix' was found)
         if: steps.semantic.outputs.new_release_published == 'true'
         uses: softprops/action-gh-release@v2
         with:
