@@ -1,0 +1,69 @@
+name: Semantic Release
+
+on:
+  push:
+    branches:
+      - main # Triggers on every push to master
+
+jobs:
+  release:
+    name: Build and Release
+    permissions:
+      contents: write   # Required to create tags and releases
+      id-token: write   # Required for provenance/attestations
+      attestations: write
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches all history so semantic-release can calculate version
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.x
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Run Build Runner
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Build Android Artifacts
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
+
+      - name: Semantic Release
+        uses: cycjimmy/semantic-release-action@v4
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # This specifies which files to attach to the release
+          extra_plugins: |
+            @semantic-release/git
+            @semantic-release/github
+          branch: master
+
+      - name: Upload Artifacts to Release
+        # This only runs if a new version was actually determined (e.g., a 'feat' or 'fix' was found)
+        if: steps.semantic.outputs.new_release_published == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.semantic.outputs.new_release_version }}
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
