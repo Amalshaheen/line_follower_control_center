@@ -51,7 +51,7 @@ class _PIDControlPanelState extends State<PIDControlPanel> {
           children: [
             Row(
               children: [
-                Icon(Icons.tune, color: theme.primaryColor),
+                Icon(Icons.tune, color: Colors.blue),
                 const SizedBox(width: 8),
                 const Text(
                   'PID Tuning',
