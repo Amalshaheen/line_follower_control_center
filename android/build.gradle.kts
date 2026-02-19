@@ -3,6 +3,14 @@ allprojects {
         google()
         mavenCentral()
     }
+
+    configurations.all {
+        // Force specific versions to resolve conflicts
+        resolutionStrategy {
+            force("com.google.android.material:material:1.11.0")
+            force("androidx.appcompat:appcompat:1.7.0")
+        }
+    }
 }
 
 val newBuildDir: Directory =
