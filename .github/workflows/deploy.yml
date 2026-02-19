@@ -67,7 +67,7 @@ jobs:
 
       - name: Build Signed APK
         # We build the APK BEFORE the release step so it exists when semantic-release looks for it
-        run: flutter build apk --release --verbose --stacktrace
+        run: flutter build apk --release --verbose
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
@@ -75,7 +75,7 @@ jobs:
 
       - name: Build Signed AAB (Android App Bundle)
         # Build AAB for Play Store distribution
-        run: flutter build appbundle --release --verbose --stacktrace
+        run: flutter build appbundle --release --verbose
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
