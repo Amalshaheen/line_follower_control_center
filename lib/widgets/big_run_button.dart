@@ -18,7 +18,10 @@ class BigRunButton extends StatelessWidget {
       margin: const EdgeInsets.all(16),
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: isRunning ? Colors.red : Colors.green,
+          backgroundColor: isRunning ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+          foregroundColor: Colors.white,
+          elevation: 6,
+          shadowColor: isRunning ? const Color(0xFFEF4444).withOpacity(0.5) : const Color(0xFF10B981).withOpacity(0.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
@@ -26,7 +29,11 @@ class BigRunButton extends StatelessWidget {
         onPressed: onPressed,
         child: Text(
           isRunning ? "STOP BOT" : "START BOT",
-          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
         ),
       ),
     );

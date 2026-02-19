@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.line_follower_control_center"
-    compileSdk = 34
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
