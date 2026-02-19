@@ -51,10 +51,23 @@ jobs:
       - name: Setup keystore
         run: |
           echo "${{ secrets.KEYSTORE }}" | base64 --decode > "android/app/keystore.jks"
+          ls -lh android/app/keystore.jks
+
+      - name: Verify signing configuration
+        run: |
+          echo "Checking signing config environment variables..."
+          if [ -z "$KEYSTORE_PASSWORD" ]; then echo "ERROR: KEYSTORE_PASSWORD is not set"; exit 1; fi
+          if [ -z "$KEYSTORE_ALIAS" ]; then echo "ERROR: KEYSTORE_ALIAS is not set"; exit 1; fi
+          if [ -z "$KEYSTORE_ALIAS_PASSWORD" ]; then echo "ERROR: KEYSTORE_ALIAS_PASSWORD is not set"; exit 1; fi
+          echo "All signing environment variables are set ✓"
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
+          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
 
       - name: Build Signed APK
         # We build the APK BEFORE the release step so it exists when semantic-release looks for it
-        run: flutter build apk --release
+        run: flutter build apk --release --verbose --stacktrace
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
@@ -62,7 +75,7 @@ jobs:
 
       - name: Build Signed AAB (Android App Bundle)
         # Build AAB for Play Store distribution
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --verbose --stacktrace
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
