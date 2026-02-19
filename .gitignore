@@ -44,3 +44,8 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .secrets
+
+# Keystore files (never commit these!)
+*.jks
+*.keystore
+keystore_base64.txt

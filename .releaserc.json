@@ -7,7 +7,8 @@
       "@semantic-release/github",
       {
         "assets": [
-          {"path": "build/app/outputs/flutter-apk/app-release.apk", "label": "Android APK"}
+          {"path": "build/app/outputs/flutter-apk/app-release.apk", "label": "Android APK"},
+          {"path": "build/app/outputs/bundle/release/app-release.aab", "label": "Android App Bundle (AAB)"}
         ]
       }
     ]

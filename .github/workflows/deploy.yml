@@ -60,6 +60,14 @@ jobs:
           KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
           KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
 
+      - name: Build Signed AAB (Android App Bundle)
+        # Build AAB for Play Store distribution
+        run: flutter build appbundle --release
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ENTRY_ALIAS }}
+          KEYSTORE_ALIAS_PASSWORD: ${{ secrets.KEYSTORE_ENTRY_PASSWORD }}
+
       - name: Semantic Release
         uses: cycjimmy/semantic-release-action@v4
         id: semantic

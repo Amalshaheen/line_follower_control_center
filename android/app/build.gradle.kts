@@ -31,18 +31,17 @@ android {
     }
 
     signingConfigs {
-        // Signing configuration disabled for development
-        // create("release") {
-        //     storeFile = file("keystore.jks")
-        //     storePassword = System.getenv("KEYSTORE_PASSWORD")
-        //     keyAlias = System.getenv("KEYSTORE_ALIAS")
-        //     keyPassword = System.getenv("KEYSTORE_ALIAS_PASSWORD")
-        // }
+        create("release") {
+            storeFile = file("keystore.jks")
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEYSTORE_ALIAS")
+            keyPassword = System.getenv("KEYSTORE_ALIAS_PASSWORD")
+        }
     }
 
     buildTypes {
         getByName("release") {
-            // signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("release")
             
             isMinifyEnabled = false
             isShrinkResources = false
