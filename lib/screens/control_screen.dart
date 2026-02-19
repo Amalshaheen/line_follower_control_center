@@ -369,8 +369,7 @@ class _ControlScreenState extends State<ControlScreen> {
                     setState(() {});
                   },
                 ),
-                const SizedBox(height: 20),
-                LogConsole(logs: logs),
+
                 const SizedBox(height: 24),
                 // Saved Runs Section
                 Padding(
@@ -411,6 +410,8 @@ class _ControlScreenState extends State<ControlScreen> {
                     isLoading: _loadingSavedRuns,
                   ),
                 ),
+                                const SizedBox(height: 20),
+                LogConsole(logs: logs),
               ],
             ),
           ),
